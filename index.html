@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2º Turno Presidencial 2026 — Jamildo.com</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --laranja: #f83d03;
+            --azul: #024796;
+            --escuro: #0a0f1e;
+            --escuro-2: #111827;
+            --borda: rgba(255,255,255,0.08);
+            --texto: #e8eaf0;
+            --texto-suave: #8892a4;
+            --verde-eleito: #10b981;
+            --fonte-display: 'Barlow Condensed', sans-serif;
+            --fonte-corpo: 'Barlow', sans-serif;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--fonte-corpo);
+            background-color: var(--escuro);
+            color: var(--texto);
+            padding: 16px;
+        }
+
+        .painel-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Seletor de Abrangência */
+        .seletor-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--escuro-2);
+            border: 1px solid var(--borda);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            gap: 12px;
+        }
+        .seletor-label {
+            font-family: var(--fonte-display);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+            color: var(--texto-suave);
+        }
+        .select-uf {
+            background: #1c2535;
+            color: #fff;
+            border: 1px solid var(--borda);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-family: var(--fonte-corpo);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+        }
+
+        /* Card de Totalização */
+        .totalizacao-box {
+            background: var(--escuro-2);
+            border: 1px solid var(--borda);
+            border-radius: 12px;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .tot-dado { text-align: left; }
+        .tot-label {
+            font-family: var(--fonte-display);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--texto-suave);
+        }
+        .tot-valor {
+            font-family: var(--fonte-display);
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #fff;
+        }
+        .tot-valor.destaque { color: var(--laranja); }
+
+        /* Grid Frente a Frente (2 Finalistas) */
+        .grid-finalistas {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .card-finalista {
+            background: var(--escuro-2);
+            border: 1px solid var(--borda);
+            border-radius: 16px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+        }
+        .card-finalista:first-child { border-top: 4px solid var(--laranja); }
+        .card-finalista:last-child { border-top: 4px solid var(--azul); }
+
+        .perfil-topo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .foto-finalista {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255,255,255,0.9);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+        .nome-finalista {
+            font-family: var(--fonte-display);
+            font-size: 1.25rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            line-height: 1.1;
+        }
+        .tag-partido {
+            font-size: 0.75rem;
+            color: var(--texto-suave);
+            margin-top: 4px;
+            display: block;
+        }
+
+        .selo-status {
+            display: inline-block;
+            font-family: var(--fonte-display);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 4px;
+            color: #fff;
+            margin-top: 4px;
+        }
+        .selo-status.eleito { background-color: var(--verde-eleito); }
+
+        .bloco-votos {
+            margin-top: auto;
+        }
+        .pct-votos {
+            font-family: var(--fonte-display);
+            font-size: 2.2rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+        .abs-votos {
+            font-size: 0.8rem;
+            color: var(--texto-suave);
+            margin-top: 4px;
+        }
+
+        .barra-wrap {
+            height: 6px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .barra-fill {
+            height: 100%;
+            transition: width 1s ease;
+        }
+        .card-finalista:first-child .barra-fill { background: var(--laranja); }
+        .card-finalista:last-child .barra-fill { background: var(--azul); }
+
+        @media (max-width: 600px) {
+            .grid-finalistas {
+                grid-template-columns: 1fr;
+            }
+            .totalizacao-box {
+                flex-direction: column;
+                gap: 8px;
+                text-align: center;
+            }
+            .tot-dado { text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="painel-container">
+        
+        <div class="seletor-wrapper">
+            <span class="seletor-label">Filtrar Apuração:</span>
+            <select id="select-abrangencia" class="select-uf" onchange="mudarAbrangencia(this.value)">
+                <option value="br" selected>Brasil (Geral)</option>
+                <optgroup label="Nordeste">
+                    <option value="pe">Pernambuco (PE)</option>
+                    <option value="al">Alagoas (AL)</option>
+                    <option value="ba">Bahia (BA)</option>
+                    <option value="ce">Ceará (CE)</option>
+                    <option value="ma">Maranhão (MA)</option>
+                    <option value="pb">Paraíba (PB)</option>
+                    <option value="pi">Piauí (PI)</option>
+                    <option value="rn">Rio Grande do Norte (RN)</option>
+                    <option value="se">Sergipe (SE)</option>
+                </optgroup>
+                <optgroup label="Sudeste">
+                    <option value="sp">São Paulo (SP)</option>
+                    <option value="rj">Rio de Janeiro (RJ)</option>
+                    <option value="mg">Minas Gerais (MG)</option>
+                    <option value="es">Espírito Santo (ES)</option>
+                </optgroup>
+                <optgroup label="Sul">
+                    <option value="pr">Paraná (PR)</option>
+                    <option value="rs">Rio Grande do Sul (RS)</option>
+                    <option value="sc">Santa Catarina (SC)</option>
+                </optgroup>
+                <optgroup label="Centro-Oeste">
+                    <option value="df">Distrito Federal (DF)</option>
+                    <option value="go">Goiás (GO)</option>
+                    <option value="mt">Mato Grosso (MT)</option>
+                    <option value="ms">Mato Grosso do Sul (MS)</option>
+                </optgroup>
+                <optgroup label="Norte">
+                    <option value="ac">Acre (AC)</option>
+                    <option value="am">Amazonas (AM)</option>
+                    <option value="ap">Amapá (AP)</option>
+                    <option value="pa">Pará (PA)</option>
+                    <option value="ro">Rondônia (RO)</option>
+                    <option value="rr">Roraima (RR)</option>
+                    <option value="to">Tocantins (TO)</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="totalizacao-box">
+            <div class="tot-dado">
+                <div class="tot-label">Seções Apuradas (<span id="txt-local">Brasil</span>)</div>
+                <div class="tot-valor destaque" id="pct-apurado">0,00%</div>
+            </div>
+            <div class="tot-dado" style="text-align: right;">
+                <div class="tot-label">Horário Oficial TSE</div>
+                <div class="tot-valor" id="hora-tse">00:00:00</div>
+            </div>
+        </div>
+
+        <div class="grid-finalistas" id="container-finalistas">
+            <!-- Renderizado dinamicamente -->
+        </div>
+
+    </div>
+
+    <script>
+        // Substitua pela URL do novo Worker criado no Passo 2
+        const WORKER_2T_URL = "https://tse-proxy-2t.cynaramaira.workers.dev/";
+        let ufAtiva = "br";
+
+        function mudarAbrangencia(novaUf) {
+            ufAtiva = novaUf;
+            const select = document.getElementById("select-abrangencia");
+            document.getElementById("txt-local").textContent = select.options[select.selectedIndex].text.split('(')[0].trim();
+            carregarDados();
+        }
+
+        async function carregarDados() {
+            try {
+                const res = await fetch(WORKER_2T_URL + "?uf=" + ufAtiva);
+                if (!res.ok) throw new Error("Falha na consulta");
+                const dados = await res.json();
+                renderizar(dados);
+            } catch (err) {
+                console.error("Erro ao carregar dados:", err);
+            }
+        }
+
+        function renderizar(dados) {
+            document.getElementById("pct-apurado").textContent = (dados.andamento || "0,00") + "%";
+            document.getElementById("hora-tse").textContent = dados.dataHora || "00:00:00";
+
+            const container = document.getElementById("container-finalistas");
+            container.innerHTML = "";
+
+            const finalistas = dados.candidatos.slice(0, 2);
+
+            finalistas.forEach((cand, idx) => {
+                let selo = "";
+                if (cand.eleito === "E") {
+                    selo = "<span class='selo-status eleito'>Eleito</span>";
+                } else if (cand.eleito === "MAT_ELEITO") {
+                    selo = "<span class='selo-status eleito'>Mat. Eleito</span>";
+                }
+
+                const card = `
+                    <div class="card-finalista">
+                        <div class="perfil-topo">
+                            <img src="${cand.foto}" class="foto-finalista" alt="${cand.nomeUrna}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 24 24\' fill=\'%238892a4\'><circle cx=\'12\' cy=\'8\' r=\'4\'/><path d=\'M12 14c-5 0-8 2.5-8 5v1h16v-1c0-2.5-3-5-8-5z\'/></svg>'">
+                            <div>
+                                <h2 class="nome-finalista">${cand.nomeUrna}</h2>
+                                <span class="tag-partido">${cand.partido} | nº ${cand.numero}</span>
+                                ${selo}
+                            </div>
+                        </div>
+                        <div class="bloco-votos">
+                            <div class="pct-votos">${cand.votos.porcentagem}%</div>
+                            <div class="abs-votos">${cand.votos.quantidade.toLocaleString('pt-BR')} votos</div>
+                            <div class="barra-wrap">
+                                <div class="barra-fill" style="width: ${String(cand.votos.porcentagem).replace(',', '.')}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
+
+        carregarDados();
+        setInterval(carregarDados, 60000);
+    </script>
+</body>
+</html>
