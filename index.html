@@ -34,7 +34,7 @@
             padding-bottom: 30px;
         }
 
-        /* HEADER COM LOGO JAMILDO.COM */
+        /* HEADER OFICIAL JAMILDO.COM */
         header {
             background: rgba(10, 15, 30, 0.9);
             border-bottom: 1px solid var(--borda);
@@ -214,6 +214,7 @@
             border: 2px solid rgba(255,255,255,0.9);
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
             flex-shrink: 0;
+            background: var(--escuro-3);
         }
         .nome-finalista {
             font-family: var(--fonte-display);
@@ -269,7 +270,7 @@
         .card-finalista:first-child .barra-fill { background: var(--laranja); }
         .card-finalista:last-child .barra-fill { background: var(--azul); }
 
-        /* 5. PAINEL DE APURAÇÃO REGIONAL (O RECURSO NOVO) */
+        /* 5. PAINEL REGIONAL */
         .secao-regioes-titulo {
             font-family: var(--fonte-display);
             font-size: 1.1rem;
@@ -376,7 +377,7 @@
 
     <div class="painel-container">
         
-        <!-- Pílulas de Seleção Rápida -->
+        <!-- Pílulas de Seleção Rápida de Regiões -->
         <div class="regioes-bar">
             <button class="btn-regiao ativa" onclick="selecionarRegiao('BR', this)">🇧🇷 Brasil</button>
             <button class="btn-regiao" onclick="selecionarRegiao('NE', this)">Nordeste</button>
@@ -409,7 +410,7 @@
             <!-- Inserido dinamicamente -->
         </div>
 
-        <!-- SEÇÃO EXTRA: APURAÇÃO POR MACRORREGIÃO -->
+        <!-- SEÇÃO: APURAÇÃO POR MACRORREGIÃO -->
         <div class="secao-regioes-titulo">
             Ritmo da Apuração por Região
             <span>Clique para filtrar</span>
@@ -490,7 +491,10 @@
     </div>
 
     <script>
-        const WORKER_2T_URL = "https://tse-proxy-2t.cynaramaira.workers.dev/";
+        // CONFIGURAÇÕES DIRETAS DO TSE (SEM PASSAR POR PROXY/CLOUDFLARE)
+        const TSE_BASE = "https://resultados.tse.jus.br/oficial";
+        const CICLO = "ele2026";
+        const PLEITO_2T = "6258"; // Código Oficial 2º Turno Presidente
         let ufAtiva = "br";
 
         const DADOS_REGIOES = {
@@ -533,6 +537,176 @@
                 { sigla: 'to', nome: 'Tocantins' }
             ]
         };
+
+        // Decodificador Universal de JWS Oficial do TSE (RFC 7515)
+        function decodificarJWS(textoBruto) {
+            if (!textoBruto.includes('.')) {
+                return JSON.parse(textoBruto);
+            }
+            const partes = textoBruto.split('.');
+            let payloadBase64 = partes[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (payloadBase64.length % 4) {
+                payloadBase64 += '=';
+            }
+            const jsonDecodificado = decodeURIComponent(
+                atob(payloadBase64)
+                    .split('')
+                    .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                    .join('')
+            );
+            return JSON.parse(jsonDecodificado);
+        }
+
+        async function carregarDados() {
+            const sufixoEleicao = PLEITO_2T.padStart(6, '0');
+            const nocache = Date.now();
+            
+            // Consome diretamente o .jws da CDN oficial que o app do TSE consome
+            const urlFinal = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${ufAtiva}/${ufAtiva}-c0001-e${sufixoEleicao}-u.jws?nocache=${nocache}`;
+
+            try {
+                const res = await fetch(urlFinal);
+                if (!res.ok) throw new Error("Status TSE: " + res.status);
+                
+                const texto = await res.text();
+                const tseData = decodificarJWS(texto);
+                processarERenderizar(tseData);
+            } catch (err) {
+                console.warn("Tentando fallback de formato:", err);
+                // Fallback de segurança se abrir o .json plano
+                try {
+                    const urlJson = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${ufAtiva}/${ufAtiva}-c0001-e${sufixoEleicao}-u.json?nocache=${nocache}`;
+                    const resJson = await fetch(urlJson);
+                    if (resJson.ok) {
+                        const dados = await resJson.json();
+                        processarERenderizar(dados);
+                    }
+                } catch (e2) {
+                    console.error("Erro total na busca:", e2);
+                }
+            }
+        }
+
+        function processarERenderizar(tseData) {
+            const andamento = tseData.pst || (tseData.s ? tseData.s.pst : "0,00");
+            document.getElementById("pct-apurado").textContent = andamento + "%";
+            document.getElementById("hora-tse").textContent = tseData.ht || (tseData.hg || "00:00:00");
+
+            atualizarProgressoRegioes(ufAtiva, andamento);
+
+            const matematicamenteDefinido = (tseData.md || "n").toLowerCase();
+            const totalizacaoFinalizada = (tseData.tf || "n").toLowerCase() === "s" || (tseData.s && String(tseData.s.pst).replace(',', '.') === '100.00');
+
+            // Extração segura do bloco de cargo
+            let dadosCargo = null;
+            if (tseData.carg && Array.isArray(tseData.carg)) {
+                dadosCargo = tseData.carg.find(c => String(c.cd).padStart(4, '0') === '0001') || tseData.carg[0];
+            } else {
+                dadosCargo = tseData.carg || tseData;
+            }
+
+            // Extração hierárquica (agr -> par -> cand)
+            const candidatos = [];
+            if (dadosCargo && dadosCargo.agr && Array.isArray(dadosCargo.agr)) {
+                dadosCargo.agr.forEach(agrupamento => {
+                    if (agrupamento.par && Array.isArray(agrupamento.par)) {
+                        agrupamento.par.forEach(partido => {
+                            const siglaPartido = partido.sg || agrupamento.nm || "PARTIDO";
+                            if (partido.cand && Array.isArray(partido.cand)) {
+                                partido.cand.forEach(c => {
+                                    candidatos.push({ ...c, siglaExtraida: siglaPartido });
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+
+            const candidatosTratados = [];
+
+            candidatos.forEach(cand => {
+                const nomeUrna = cand.nmu || cand.nm || "";
+                const numero = cand.n || cand.numero || "";
+                if (!nomeUrna || !numero) return;
+
+                const partido = cand.siglaExtraida || "PARTIDO";
+                const votosQtd = parseInt(cand.vap || cand.tvap || cand.v || 0) || 0;
+                const votosPct = cand.pvap || cand.ppvap || cand.pv || "0,00";
+
+                let statusFinal = "N";
+                const textoSituacao = (cand.st || cand.dsit || "").toLowerCase().trim();
+                const isEleitoFlag = (cand.e === "s" || cand.e === "S");
+                const isDerrotado = textoSituacao.includes("não eleito") || textoSituacao.includes("nao eleito");
+
+                if (!isDerrotado && (textoSituacao.startsWith("eleito") || (isEleitoFlag && textoSituacao === ""))) {
+                    statusFinal = "E";
+                }
+
+                const sqcand = cand.sqcand || cand.seq || numero;
+                const fotoUrl = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/fotos/br/${sqcand}.jpeg`;
+
+                candidatosTratados.push({
+                    nomeUrna: nomeUrna,
+                    numero: numero,
+                    partido: partido,
+                    eleito: statusFinal,
+                    foto: fotoUrl,
+                    votosQtd: votosQtd,
+                    votosPct: votosPct
+                });
+            });
+
+            candidatosTratados.sort((a, b) => b.votosQtd - a.votosQtd);
+
+            // Regra oficial para 2T: Definição Matemática ou Totalização
+            if (candidatosTratados.length > 0) {
+                if (!totalizacaoFinalizada) {
+                    if (matematicamenteDefinido === "e" && ufAtiva === 'br') {
+                        candidatosTratados[0].eleito = "MAT_ELEITO";
+                    }
+                } else if (ufAtiva === 'br') {
+                    candidatosTratados[0].eleito = "E";
+                    if (candidatosTratados[1]) candidatosTratados[1].eleito = "N";
+                }
+            }
+
+            renderizarFinalistas(candidatosTratados.slice(0, 2));
+        }
+
+        function renderizarFinalistas(finalistas) {
+            const container = document.getElementById("container-finalistas");
+            container.innerHTML = "";
+
+            finalistas.forEach(cand => {
+                let selo = "";
+                if (cand.eleito === "E") {
+                    selo = "<span class='selo-status eleito'>Eleito</span>";
+                } else if (cand.eleito === "MAT_ELEITO") {
+                    selo = "<span class='selo-status eleito'>Matematicamente Eleito</span>";
+                }
+
+                const card = `
+                    <div class="card-finalista">
+                        <div class="perfil-topo">
+                            <img src="${cand.foto}" class="foto-finalista" alt="${cand.nomeUrna}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'62\' height=\'62\' viewBox=\'0 0 24 24\' fill=\'%238892a4\'><circle cx=\'12\' cy=\'8\' r=\'4\'/><path d=\'M12 14c-5 0-8 2.5-8 5v1h16v-1c0-2.5-3-5-8-5z\'/></svg>'">
+                            <div>
+                                <h2 class="nome-finalista">${cand.nomeUrna}</h2>
+                                <span class="tag-partido">${cand.partido} | nº ${cand.numero}</span>
+                                ${selo}
+                            </div>
+                        </div>
+                        <div class="bloco-votos">
+                            <div class="pct-votos">${cand.votosPct}%</div>
+                            <div class="abs-votos">${cand.votosQtd.toLocaleString('pt-BR')} votos</div>
+                            <div class="barra-wrap">
+                                <div class="barra-fill" style="width: ${String(cand.votosPct).replace(',', '.')}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += card;
+            });
+        }
 
         function selecionarRegiao(codigoRegiao, elementoBotao) {
             document.querySelectorAll('.btn-regiao').forEach(btn => btn.classList.remove('ativa'));
@@ -581,65 +755,8 @@
             carregarDados();
         }
 
-        async function carregarDados() {
-            try {
-                const res = await fetch(WORKER_2T_URL + "?uf=" + ufAtiva);
-                if (!res.ok) throw new Error("Falha na consulta");
-                const dados = await res.json();
-                renderizar(dados);
-            } catch (err) {
-                console.error("Erro ao carregar dados:", err);
-            }
-        }
-
-        function renderizar(dados) {
-            const andamento = dados.andamento || "0,00";
-            document.getElementById("pct-apurado").textContent = andamento + "%";
-            document.getElementById("hora-tse").textContent = dados.dataHora || "00:00:00";
-
-            // Atualiza a barra da região correspondente se for um estado monitorado
-            atualizarProgressoRegioes(ufAtiva, andamento);
-
-            const container = document.getElementById("container-finalistas");
-            container.innerHTML = "";
-
-            const finalistas = (dados.candidatos || []).slice(0, 2);
-
-            finalistas.forEach(cand => {
-                let selo = "";
-                if (cand.eleito === "E") {
-                    selo = "<span class='selo-status eleito'>Eleito</span>";
-                } else if (cand.eleito === "MAT_ELEITO") {
-                    selo = "<span class='selo-status eleito'>Matematicamente Eleito</span>";
-                }
-
-                const card = `
-                    <div class="card-finalista">
-                        <div class="perfil-topo">
-                            <img src="${cand.foto}" class="foto-finalista" alt="${cand.nomeUrna}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'62\' height=\'62\' viewBox=\'0 0 24 24\' fill=\'%238892a4\'><circle cx=\'12\' cy=\'8\' r=\'4\'/><path d=\'M12 14c-5 0-8 2.5-8 5v1h16v-1c0-2.5-3-5-8-5z\'/></svg>'">
-                            <div>
-                                <h2 class="nome-finalista">${cand.nomeUrna}</h2>
-                                <span class="tag-partido">${cand.partido} | nº ${cand.numero}</span>
-                                ${selo}
-                            </div>
-                        </div>
-                        <div class="bloco-votos">
-                            <div class="pct-votos">${cand.votos.porcentagem}%</div>
-                            <div class="abs-votos">${cand.votos.quantidade.toLocaleString('pt-BR')} votos</div>
-                            <div class="barra-wrap">
-                                <div class="barra-fill" style="width: ${String(cand.votos.porcentagem).replace(',', '.')}%"></div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.innerHTML += card;
-            });
-        }
-
         function atualizarProgressoRegioes(uf, andamento) {
             const pctNumerico = String(andamento).replace(',', '.');
-            
-            // Mapeia o progresso do estado ativo para a caixinha da sua região
             if (['pe', 'ba', 'ce', 'ma', 'pb', 'al', 'rn', 'pi', 'se'].includes(uf)) {
                 document.getElementById('reg-pct-ne').textContent = andamento + "%";
                 document.getElementById('reg-bar-ne').style.width = pctNumerico + "%";
@@ -656,7 +773,6 @@
                 document.getElementById('reg-pct-norte').textContent = andamento + "%";
                 document.getElementById('reg-bar-norte').style.width = pctNumerico + "%";
             } else if (uf === 'br') {
-                // No consolidado Brasil, replica para dar dinamismo visual inicial
                 ['ne', 'se', 'sul', 'co', 'norte'].forEach(r => {
                     const el = document.getElementById('reg-pct-' + r);
                     const bar = document.getElementById('reg-bar-' + r);
@@ -667,7 +783,8 @@
         }
 
         carregarDados();
-        setInterval(carregarDados, 60000);
+        // Atualiza a cada 30 segundos direto da CDN do TSE
+        setInterval(carregarDados, 30000);
     </script>
 </body>
 </html>
