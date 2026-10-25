@@ -512,7 +512,6 @@
         let ufAtiva = "br";
         let regiaoAtiva = "BR";
 
-        // Mapeamento dos grupos de estados por regiao
         const GRUPOS_REGIAO = {
             'ne': ['pe', 'ba', 'ce', 'ma', 'pb', 'al', 'rn', 'pi', 'se'],
             'se': ['sp', 'rj', 'mg', 'es'],
@@ -527,7 +526,6 @@
                 { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: 'Total Brasil' }
             ],
             'EXT': [
-                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
                 { sigla: 'zz', nome: 'Exterior (Total Consolidado)', rotulo: 'Total Exterior' },
                 { sigla: 'zz30325', nome: 'Lisboa (Portugal)', rotulo: 'Lisboa' },
                 { sigla: 'zz30570', nome: 'Miami (EUA)', rotulo: 'Miami' },
@@ -540,7 +538,7 @@
                 { sigla: 'zz29378', nome: 'Buenos Aires (Argentina)', rotulo: 'Buenos Aires' }
             ],
             'NE': [
-                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
+                { sigla: 'regiao_ne', nome: 'Região Nordeste (Total)', rotulo: 'Total Nordeste' },
                 { sigla: 'pe', nome: 'Pernambuco' },
                 { sigla: 'ba', nome: 'Bahia' },
                 { sigla: 'ce', nome: 'Ceará' },
@@ -552,27 +550,27 @@
                 { sigla: 'se', nome: 'Sergipe' }
             ],
             'SE': [
-                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
+                { sigla: 'regiao_se', nome: 'Região Sudeste (Total)', rotulo: 'Total Sudeste' },
                 { sigla: 'sp', nome: 'São Paulo' },
                 { sigla: 'rj', nome: 'Rio de Janeiro' },
                 { sigla: 'mg', nome: 'Minas Gerais' },
                 { sigla: 'es', nome: 'Espírito Santo' }
             ],
             'SUL': [
-                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
+                { sigla: 'regiao_sul', nome: 'Região Sul (Total)', rotulo: 'Total Sul' },
                 { sigla: 'pr', nome: 'Paraná' },
                 { sigla: 'rs', nome: 'Rio Grande do Sul' },
                 { sigla: 'sc', nome: 'Santa Catarina' }
             ],
             'CO': [
-                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
+                { sigla: 'regiao_co', nome: 'Região Centro-Oeste (Total)', rotulo: 'Total Centro-Oeste' },
                 { sigla: 'df', nome: 'Distrito Federal' },
                 { sigla: 'go', nome: 'Goiás' },
                 { sigla: 'mt', nome: 'Mato Grosso' },
                 { sigla: 'ms', nome: 'Mato Grosso do Sul' }
             ],
             'NORTE': [
-                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
+                { sigla: 'regiao_norte', nome: 'Região Norte (Total)', rotulo: 'Total Norte' },
                 { sigla: 'am', nome: 'Amazonas' },
                 { sigla: 'pa', nome: 'Pará' },
                 { sigla: 'ac', nome: 'Acre' },
@@ -601,7 +599,7 @@
             return JSON.parse(jsonDecodificado);
         }
 
-        // CARREGA O ARQUIVO DE ACOMPANHAMENTO BRASIL (EA14) PARA ATUALIZAR TODAS AS REGIOES DE UMA VEZ
+        // CARREGA O ARQUIVO DE ACOMPANHAMENTO BRASIL (EA14)
         async function carregarProgressoGeralRegioes() {
             const sufixoEleicao = PLEITO_2T.padStart(6, '0');
             const nocache = Date.now();
@@ -614,7 +612,6 @@
                 const dadosAcomp = decodificarJWS(texto);
                 processarProgressoPorRegiao(dadosAcomp);
             } catch (e) {
-                // Fallback para arquivo plano se jws nao responder
                 try {
                     const urlJson = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/br/br-e${sufixoEleicao}-ab.json?nocache=${nocache}`;
                     const resJson = await fetch(urlJson);
@@ -623,7 +620,7 @@
                         processarProgressoPorRegiao(dadosJson);
                     }
                 } catch (e2) {
-                    console.warn("Aguardando geracao do arquivo de acompanhamento regional:", e2);
+                    console.warn("Aguardando arquivo de acompanhamento regional:", e2);
                 }
             }
         }
@@ -631,7 +628,6 @@
         function processarProgressoPorRegiao(dadosAcomp) {
             if (!dadosAcomp || !dadosAcomp.abr) return;
 
-            // Mapeia todas as UFs retornadas
             const mapaUFs = {};
             dadosAcomp.abr.forEach(item => {
                 const sigla = (item.cdabr || '').toLowerCase();
@@ -640,7 +636,6 @@
                 mapaUFs[sigla] = { totalSecoes, secoesTot };
             });
 
-            // Calcula a totalizacao ponderada por regiao
             Object.keys(GRUPOS_REGIAO).forEach(reg => {
                 const siglas = GRUPOS_REGIAO[reg];
                 let somaTotal = 0;
@@ -665,10 +660,135 @@
             });
         }
 
-        async function carregarDados() {
+        // BAIXA DADOS DE UMA UF ESPECIFICA
+        async function fetchUFDados(ufCod) {
             const sufixoEleicao = PLEITO_2T.padStart(6, '0');
             const nocache = Date.now();
-            
+            const pastaUf = ufCod.startsWith('zz') ? 'zz' : ufCod;
+            const urlFinal = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${pastaUf}/${ufCod}-c0001-e${sufixoEleicao}-u.jws?nocache=${nocache}`;
+
+            try {
+                const res = await fetch(urlFinal);
+                if (!res.ok) throw new Error("Erro UF: " + res.status);
+                const texto = await res.text();
+                return decodificarJWS(texto);
+            } catch (err) {
+                try {
+                    const urlJson = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${pastaUf}/${ufCod}-c0001-e${sufixoEleicao}-u.json?nocache=${nocache}`;
+                    const resJson = await fetch(urlJson);
+                    if (resJson.ok) return await resJson.json();
+                } catch (e2) {}
+            }
+            return null;
+        }
+
+        // EXTRAI CANDIDATOS DO FORMATO OFICIAL DO TSE
+        function extrairCandidatosDeJSON(tseData) {
+            let dadosCargo = null;
+            if (tseData.carg && Array.isArray(tseData.carg)) {
+                dadosCargo = tseData.carg.find(c => String(c.cd).padStart(4, '0') === '0001') || tseData.carg[0];
+            } else {
+                dadosCargo = tseData.carg || tseData;
+            }
+
+            const lista = [];
+            if (dadosCargo && dadosCargo.agr && Array.isArray(dadosCargo.agr)) {
+                dadosCargo.agr.forEach(agrupamento => {
+                    if (agrupamento.par && Array.isArray(agrupamento.par)) {
+                        agrupamento.par.forEach(partido => {
+                            const siglaPartido = partido.sg || agrupamento.nm || "PARTIDO";
+                            if (partido.cand && Array.isArray(partido.cand)) {
+                                partido.cand.forEach(c => {
+                                    lista.push({ ...c, siglaExtraida: siglaPartido });
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            return lista;
+        }
+
+        // CARREGA E CONSOLIDA EM TEMPO REAL QUANDO CLICADO EM "TOTAL [REGIAO]"
+        async function carregarConsolidadoRegiao(chaveRegiao) {
+            const listaUfs = GRUPOS_REGIAO[chaveRegiao] || [];
+            const promessas = listaUfs.map(s => fetchUFDados(s));
+            const resultados = await Promise.all(promessas);
+
+            let totalSecoesReg = 0;
+            let totalApuradasReg = 0;
+            let horaMaisRecente = "00:00:00";
+            const candMap = {};
+
+            resultados.forEach(d => {
+                if (!d) return;
+
+                const ts = parseInt(d.s ? d.s.ts : (d.ts || 0)) || 0;
+                const st = parseInt(d.s ? d.s.st : (d.st || 0)) || 0;
+                totalSecoesReg += ts;
+                totalApuradasReg += st;
+
+                const h = d.ht || d.hg || "00:00:00";
+                if (h > horaMaisRecente) horaMaisRecente = h;
+
+                const lista = extrairCandidatosDeJSON(d);
+                lista.forEach(c => {
+                    const num = c.n || c.numero;
+                    if (!num) return;
+
+                    const vap = parseInt(c.vap || c.tvap || c.v || 0) || 0;
+                    if (!candMap[num]) {
+                        candMap[num] = {
+                            nomeUrna: c.nmu || c.nm,
+                            numero: num,
+                            partido: c.siglaExtraida || c.sgp || "PARTIDO",
+                            sqcand: c.sqcand || c.seq || num,
+                            votosQtd: vap
+                        };
+                    } else {
+                        candMap[num].votosQtd += vap;
+                    }
+                });
+            });
+
+            const pctApurado = totalSecoesReg > 0 
+                ? ((totalApuradasReg / totalSecoesReg) * 100).toFixed(2).replace('.', ',') 
+                : "0,00";
+
+            document.getElementById("pct-apurado").textContent = pctApurado + "%";
+            document.getElementById("hora-tse").textContent = horaMaisRecente;
+
+            const candArray = Object.values(candMap);
+            candArray.sort((a, b) => b.votosQtd - a.votosQtd);
+
+            const somaValidos = candArray.reduce((acc, c) => acc + c.votosQtd, 0);
+
+            const candidatosTratados = candArray.map(c => {
+                const pct = somaValidos > 0 ? ((c.votosQtd / somaValidos) * 100).toFixed(2).replace('.', ',') : "0,00";
+                return {
+                    nomeUrna: c.nomeUrna,
+                    numero: c.numero,
+                    partido: c.partido,
+                    eleito: "N",
+                    foto: `${TSE_BASE}/${CICLO}/${PLEITO_2T}/fotos/br/${c.sqcand}.jpeg`,
+                    votosQtd: c.votosQtd,
+                    votosPct: pct
+                };
+            });
+
+            renderizarFinalistas(candidatosTratados.slice(0, 2));
+        }
+
+        async function carregarDados() {
+            // Se o usuario selecionou uma soma regional agregada
+            if (ufAtiva.startsWith('regiao_')) {
+                const chave = ufAtiva.replace('regiao_', '');
+                await carregarConsolidadoRegiao(chave);
+                return;
+            }
+
+            const sufixoEleicao = PLEITO_2T.padStart(6, '0');
+            const nocache = Date.now();
             const pastaUf = ufAtiva.startsWith('zz') ? 'zz' : ufAtiva;
             const urlFinal = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${pastaUf}/${ufAtiva}-c0001-e${sufixoEleicao}-u.jws?nocache=${nocache}`;
 
@@ -680,7 +800,6 @@
                 const tseData = decodificarJWS(texto);
                 processarERenderizar(tseData);
             } catch (err) {
-                console.warn("Tentando fallback para arquivo json:", err);
                 try {
                     const urlJson = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${pastaUf}/${ufAtiva}-c0001-e${sufixoEleicao}-u.json?nocache=${nocache}`;
                     const resJson = await fetch(urlJson);
@@ -702,29 +821,7 @@
             const matematicamenteDefinido = (tseData.md || "n").toLowerCase();
             const totalizacaoFinalizada = (tseData.tf || "n").toLowerCase() === "s" || (tseData.s && String(tseData.s.pst).replace(',', '.') === '100.00');
 
-            let dadosCargo = null;
-            if (tseData.carg && Array.isArray(tseData.carg)) {
-                dadosCargo = tseData.carg.find(c => String(c.cd).padStart(4, '0') === '0001') || tseData.carg[0];
-            } else {
-                dadosCargo = tseData.carg || tseData;
-            }
-
-            const candidatos = [];
-            if (dadosCargo && dadosCargo.agr && Array.isArray(dadosCargo.agr)) {
-                dadosCargo.agr.forEach(agrupamento => {
-                    if (agrupamento.par && Array.isArray(agrupamento.par)) {
-                        agrupamento.par.forEach(partido => {
-                            const siglaPartido = partido.sg || agrupamento.nm || "PARTIDO";
-                            if (partido.cand && Array.isArray(partido.cand)) {
-                                partido.cand.forEach(c => {
-                                    candidatos.push({ ...c, siglaExtraida: siglaPartido });
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-
+            const candidatos = extrairCandidatosDeJSON(tseData);
             const candidatosTratados = [];
 
             candidatos.forEach(cand => {
@@ -821,8 +918,7 @@
 
             listaEstados.forEach((est, index) => {
                 const btn = document.createElement('button');
-                // Mantem ativo o estado que ja esta selecionado
-                btn.className = 'btn-uf' + (est.sigla === ufAtiva ? ' ativa' : (index === 0 && ufAtiva === 'br' ? ' ativa' : ''));
+                btn.className = 'btn-uf' + (index === 0 ? ' ativa' : '');
                 btn.textContent = est.rotulo || est.sigla.toUpperCase();
                 btn.title = est.nome;
                 btn.onclick = () => {
@@ -833,11 +929,9 @@
                 containerEstados.appendChild(btn);
             });
 
-            // Se mudou para exterior, seleciona o consolidado do exterior
-            if (codigoRegiao === 'EXT' && !ufAtiva.startsWith('zz')) {
-                mudarUF('zz', 'Exterior (Total Consolidado)');
-            } else if (codigoRegiao === 'BR') {
-                mudarUF('br', 'Brasil (Consolidado)');
+            // Ao mudar a aba da regiao, ja abre automaticamente no Total daquela regiao
+            if (listaEstados.length > 0) {
+                mudarUF(listaEstados[0].sigla, listaEstados[0].nome);
             }
         }
 
@@ -863,7 +957,6 @@
             carregarDados();
         }
 
-        // CICLO DE ATUALIZACAO AUTOMATICA
         async function executarCicloCompleto() {
             await carregarProgressoGeralRegioes();
             await carregarDados();
