@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apuração 2º Turno 2026 — Jamildo.com</title>
+    <title>Apuração 2º Turno 2026 | Jamildo.com</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -115,7 +115,7 @@
             box-shadow: 0 2px 10px var(--laranja-glow);
         }
 
-        /* 2. CHIPS DE ESTADOS / LOCALIDADE */
+        /* 2. CHIPS DE ESTADOS E CIDADES DO EXTERIOR */
         .estados-grid {
             display: flex;
             flex-wrap: wrap;
@@ -141,7 +141,7 @@
             font-family: var(--fonte-display);
             font-size: 0.8rem;
             font-weight: 700;
-            padding: 4px 10px;
+            padding: 5px 12px;
             border-radius: 6px;
             cursor: pointer;
             transition: all 0.2s;
@@ -377,7 +377,7 @@
 
     <div class="painel-container">
         
-        <!-- Pílulas de Seleção Rápida: Brasil, Exterior e Regiões -->
+        <!-- Pilulas de Selecao Rapida: Brasil, Exterior e Regioes -->
         <div class="regioes-bar">
             <button class="btn-regiao ativa" onclick="selecionarRegiao('BR', this)">🇧🇷 Brasil</button>
             <button class="btn-regiao" onclick="selecionarRegiao('EXT', this)">🌍 Exterior</button>
@@ -388,13 +388,13 @@
             <button class="btn-regiao" onclick="selecionarRegiao('NORTE', this)">Norte</button>
         </div>
 
-        <!-- Grade de Chips dos Estados / Localidades -->
+        <!-- Grade de Chips dos Estados e Cidades Estrangeiras -->
         <div class="estados-grid" id="container-estados">
             <span class="estados-label">Unidade:</span>
             <button class="btn-uf ativa" onclick="mudarUF('br', 'Brasil (Consolidado)')">Total Brasil</button>
         </div>
 
-        <!-- Barra de Seções e Horário -->
+        <!-- Barra de Secoes e Horario -->
         <div class="totalizacao-box">
             <div class="tot-dado">
                 <div class="tot-label">Seções Apuradas (<span id="txt-local">Brasil</span>)</div>
@@ -411,7 +411,7 @@
             <!-- Inserido dinamicamente -->
         </div>
 
-        <!-- SEÇÃO: APURAÇÃO POR MACRORREGIÃO -->
+        <!-- SECAO: APURACAO POR MACRORREGIAO -->
         <div class="secao-regioes-titulo">
             Ritmo da Apuração por Região
             <span>Clique para filtrar</span>
@@ -512,8 +512,21 @@
         let ufAtiva = "br";
 
         const DADOS_REGIOES = {
-            'BR': [{ sigla: 'br', nome: 'Total Brasil' }],
-            'EXT': [{ sigla: 'zz', nome: 'Exterior (ZZ)' }],
+            'BR': [
+                { sigla: 'br', nome: 'Total Brasil', rotulo: 'Total Brasil' }
+            ],
+            'EXT': [
+                { sigla: 'zz', nome: 'Exterior (Total Consolidado)', rotulo: 'Total Exterior' },
+                { sigla: 'zz30325', nome: 'Lisboa (Portugal)', rotulo: 'Lisboa' },
+                { sigla: 'zz30570', nome: 'Miami (EUA)', rotulo: 'Miami' },
+                { sigla: 'zz30473', nome: 'Londres (Reino Unido)', rotulo: 'Londres' },
+                { sigla: 'zz30341', nome: 'Porto (Portugal)', rotulo: 'Porto' },
+                { sigla: 'zz30112', nome: 'Boston (EUA)', rotulo: 'Boston' },
+                { sigla: 'zz30619', nome: 'Nova York (EUA)', rotulo: 'Nova York' },
+                { sigla: 'zz30694', nome: 'Paris (França)', rotulo: 'Paris' },
+                { sigla: 'zz30872', nome: 'Tóquio (Japão)', rotulo: 'Tóquio' },
+                { sigla: 'zz29378', nome: 'Buenos Aires (Argentina)', rotulo: 'Buenos Aires' }
+            ],
             'NE': [
                 { sigla: 'pe', nome: 'Pernambuco' },
                 { sigla: 'ba', nome: 'Bahia' },
@@ -575,7 +588,9 @@
             const sufixoEleicao = PLEITO_2T.padStart(6, '0');
             const nocache = Date.now();
             
-            const urlFinal = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${ufAtiva}/${ufAtiva}-c0001-e${sufixoEleicao}-u.jws?nocache=${nocache}`;
+            // Cidades do exterior ficam salvas dentro do diretorio zz
+            const pastaUf = ufAtiva.startsWith('zz') ? 'zz' : ufAtiva;
+            const urlFinal = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${pastaUf}/${ufAtiva}-c0001-e${sufixoEleicao}-u.jws?nocache=${nocache}`;
 
             try {
                 const res = await fetch(urlFinal);
@@ -585,16 +600,16 @@
                 const tseData = decodificarJWS(texto);
                 processarERenderizar(tseData);
             } catch (err) {
-                console.warn("Tentando fallback de formato:", err);
+                console.warn("Tentando fallback para arquivo json:", err);
                 try {
-                    const urlJson = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${ufAtiva}/${ufAtiva}-c0001-e${sufixoEleicao}-u.json?nocache=${nocache}`;
+                    const urlJson = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${pastaUf}/${ufAtiva}-c0001-e${sufixoEleicao}-u.json?nocache=${nocache}`;
                     const resJson = await fetch(urlJson);
                     if (resJson.ok) {
                         const dados = await resJson.json();
                         processarERenderizar(dados);
                     }
                 } catch (e2) {
-                    console.error("Erro total na busca:", e2);
+                    console.error("Falha ao carregar dados do TSE:", e2);
                 }
             }
         }
@@ -728,7 +743,7 @@
             listaEstados.forEach((est, index) => {
                 const btn = document.createElement('button');
                 btn.className = 'btn-uf' + (index === 0 ? ' ativa' : '');
-                btn.textContent = est.sigla.toUpperCase();
+                btn.textContent = est.rotulo || est.sigla.toUpperCase();
                 btn.title = est.nome;
                 btn.onclick = () => {
                     document.querySelectorAll('.btn-uf').forEach(b => b.classList.remove('ativa'));
@@ -767,7 +782,7 @@
 
         function atualizarProgressoRegioes(uf, andamento) {
             const pctNumerico = String(andamento).replace(',', '.');
-            if (uf === 'zz') {
+            if (uf.startsWith('zz')) {
                 const elExt = document.getElementById('reg-pct-ext');
                 const barExt = document.getElementById('reg-bar-ext');
                 if (elExt) elExt.textContent = andamento + "%";
