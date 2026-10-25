@@ -510,12 +510,24 @@
         const CICLO = "ele2026";
         const PLEITO_2T = "6258";
         let ufAtiva = "br";
+        let regiaoAtiva = "BR";
+
+        // Mapeamento dos grupos de estados por regiao
+        const GRUPOS_REGIAO = {
+            'ne': ['pe', 'ba', 'ce', 'ma', 'pb', 'al', 'rn', 'pi', 'se'],
+            'se': ['sp', 'rj', 'mg', 'es'],
+            'sul': ['pr', 'rs', 'sc'],
+            'co': ['df', 'go', 'mt', 'ms'],
+            'norte': ['am', 'pa', 'ac', 'ap', 'ro', 'rr', 'to'],
+            'ext': ['zz']
+        };
 
         const DADOS_REGIOES = {
             'BR': [
-                { sigla: 'br', nome: 'Total Brasil', rotulo: 'Total Brasil' }
+                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: 'Total Brasil' }
             ],
             'EXT': [
+                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
                 { sigla: 'zz', nome: 'Exterior (Total Consolidado)', rotulo: 'Total Exterior' },
                 { sigla: 'zz30325', nome: 'Lisboa (Portugal)', rotulo: 'Lisboa' },
                 { sigla: 'zz30570', nome: 'Miami (EUA)', rotulo: 'Miami' },
@@ -528,6 +540,7 @@
                 { sigla: 'zz29378', nome: 'Buenos Aires (Argentina)', rotulo: 'Buenos Aires' }
             ],
             'NE': [
+                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
                 { sigla: 'pe', nome: 'Pernambuco' },
                 { sigla: 'ba', nome: 'Bahia' },
                 { sigla: 'ce', nome: 'Ceará' },
@@ -539,23 +552,27 @@
                 { sigla: 'se', nome: 'Sergipe' }
             ],
             'SE': [
+                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
                 { sigla: 'sp', nome: 'São Paulo' },
                 { sigla: 'rj', nome: 'Rio de Janeiro' },
                 { sigla: 'mg', nome: 'Minas Gerais' },
                 { sigla: 'es', nome: 'Espírito Santo' }
             ],
             'SUL': [
+                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
                 { sigla: 'pr', nome: 'Paraná' },
                 { sigla: 'rs', nome: 'Rio Grande do Sul' },
                 { sigla: 'sc', nome: 'Santa Catarina' }
             ],
             'CO': [
+                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
                 { sigla: 'df', nome: 'Distrito Federal' },
                 { sigla: 'go', nome: 'Goiás' },
                 { sigla: 'mt', nome: 'Mato Grosso' },
                 { sigla: 'ms', nome: 'Mato Grosso do Sul' }
             ],
             'NORTE': [
+                { sigla: 'br', nome: 'Brasil (Consolidado)', rotulo: '🇧🇷 Total Brasil' },
                 { sigla: 'am', nome: 'Amazonas' },
                 { sigla: 'pa', nome: 'Pará' },
                 { sigla: 'ac', nome: 'Acre' },
@@ -584,11 +601,74 @@
             return JSON.parse(jsonDecodificado);
         }
 
+        // CARREGA O ARQUIVO DE ACOMPANHAMENTO BRASIL (EA14) PARA ATUALIZAR TODAS AS REGIOES DE UMA VEZ
+        async function carregarProgressoGeralRegioes() {
+            const sufixoEleicao = PLEITO_2T.padStart(6, '0');
+            const nocache = Date.now();
+            const urlAcomp = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/br/br-e${sufixoEleicao}-ab.jws?nocache=${nocache}`;
+
+            try {
+                const res = await fetch(urlAcomp);
+                if (!res.ok) throw new Error("Status EA14: " + res.status);
+                const texto = await res.text();
+                const dadosAcomp = decodificarJWS(texto);
+                processarProgressoPorRegiao(dadosAcomp);
+            } catch (e) {
+                // Fallback para arquivo plano se jws nao responder
+                try {
+                    const urlJson = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/br/br-e${sufixoEleicao}-ab.json?nocache=${nocache}`;
+                    const resJson = await fetch(urlJson);
+                    if (resJson.ok) {
+                        const dadosJson = await resJson.json();
+                        processarProgressoPorRegiao(dadosJson);
+                    }
+                } catch (e2) {
+                    console.warn("Aguardando geracao do arquivo de acompanhamento regional:", e2);
+                }
+            }
+        }
+
+        function processarProgressoPorRegiao(dadosAcomp) {
+            if (!dadosAcomp || !dadosAcomp.abr) return;
+
+            // Mapeia todas as UFs retornadas
+            const mapaUFs = {};
+            dadosAcomp.abr.forEach(item => {
+                const sigla = (item.cdabr || '').toLowerCase();
+                const totalSecoes = parseInt(item.s ? item.s.ts : 0) || 0;
+                const secoesTot = parseInt(item.s ? item.s.st : 0) || 0;
+                mapaUFs[sigla] = { totalSecoes, secoesTot };
+            });
+
+            // Calcula a totalizacao ponderada por regiao
+            Object.keys(GRUPOS_REGIAO).forEach(reg => {
+                const siglas = GRUPOS_REGIAO[reg];
+                let somaTotal = 0;
+                let somaApuradas = 0;
+
+                siglas.forEach(s => {
+                    if (mapaUFs[s]) {
+                        somaTotal += mapaUFs[s].totalSecoes;
+                        somaApuradas += mapaUFs[s].secoesTot;
+                    }
+                });
+
+                if (somaTotal > 0) {
+                    const pctCalc = ((somaApuradas / somaTotal) * 100).toFixed(2).replace('.', ',');
+                    const pctNum = ((somaApuradas / somaTotal) * 100).toFixed(2);
+                    
+                    const el = document.getElementById('reg-pct-' + reg);
+                    const bar = document.getElementById('reg-bar-' + reg);
+                    if (el) el.textContent = pctCalc + "%";
+                    if (bar) bar.style.width = pctNum + "%";
+                }
+            });
+        }
+
         async function carregarDados() {
             const sufixoEleicao = PLEITO_2T.padStart(6, '0');
             const nocache = Date.now();
             
-            // Cidades do exterior ficam salvas dentro do diretorio zz
             const pastaUf = ufAtiva.startsWith('zz') ? 'zz' : ufAtiva;
             const urlFinal = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/dados/${pastaUf}/${ufAtiva}-c0001-e${sufixoEleicao}-u.jws?nocache=${nocache}`;
 
@@ -618,8 +698,6 @@
             const andamento = tseData.pst || (tseData.s ? tseData.s.pst : "0,00");
             document.getElementById("pct-apurado").textContent = andamento + "%";
             document.getElementById("hora-tse").textContent = tseData.ht || (tseData.hg || "00:00:00");
-
-            atualizarProgressoRegioes(ufAtiva, andamento);
 
             const matematicamenteDefinido = (tseData.md || "n").toLowerCase();
             const totalizacaoFinalizada = (tseData.tf || "n").toLowerCase() === "s" || (tseData.s && String(tseData.s.pst).replace(',', '.') === '100.00');
@@ -733,6 +811,7 @@
         }
 
         function selecionarRegiao(codigoRegiao, elementoBotao) {
+            regiaoAtiva = codigoRegiao;
             document.querySelectorAll('.btn-regiao').forEach(btn => btn.classList.remove('ativa'));
             if (elementoBotao) elementoBotao.classList.add('ativa');
 
@@ -742,7 +821,8 @@
 
             listaEstados.forEach((est, index) => {
                 const btn = document.createElement('button');
-                btn.className = 'btn-uf' + (index === 0 ? ' ativa' : '');
+                // Mantem ativo o estado que ja esta selecionado
+                btn.className = 'btn-uf' + (est.sigla === ufAtiva ? ' ativa' : (index === 0 && ufAtiva === 'br' ? ' ativa' : ''));
                 btn.textContent = est.rotulo || est.sigla.toUpperCase();
                 btn.title = est.nome;
                 btn.onclick = () => {
@@ -753,8 +833,11 @@
                 containerEstados.appendChild(btn);
             });
 
-            if (listaEstados.length > 0) {
-                mudarUF(listaEstados[0].sigla, listaEstados[0].nome);
+            // Se mudou para exterior, seleciona o consolidado do exterior
+            if (codigoRegiao === 'EXT' && !ufAtiva.startsWith('zz')) {
+                mudarUF('zz', 'Exterior (Total Consolidado)');
+            } else if (codigoRegiao === 'BR') {
+                mudarUF('br', 'Brasil (Consolidado)');
             }
         }
 
@@ -780,40 +863,14 @@
             carregarDados();
         }
 
-        function atualizarProgressoRegioes(uf, andamento) {
-            const pctNumerico = String(andamento).replace(',', '.');
-            if (uf.startsWith('zz')) {
-                const elExt = document.getElementById('reg-pct-ext');
-                const barExt = document.getElementById('reg-bar-ext');
-                if (elExt) elExt.textContent = andamento + "%";
-                if (barExt) barExt.style.width = pctNumerico + "%";
-            } else if (['pe', 'ba', 'ce', 'ma', 'pb', 'al', 'rn', 'pi', 'se'].includes(uf)) {
-                document.getElementById('reg-pct-ne').textContent = andamento + "%";
-                document.getElementById('reg-bar-ne').style.width = pctNumerico + "%";
-            } else if (['sp', 'rj', 'mg', 'es'].includes(uf)) {
-                document.getElementById('reg-pct-se').textContent = andamento + "%";
-                document.getElementById('reg-bar-se').style.width = pctNumerico + "%";
-            } else if (['pr', 'rs', 'sc'].includes(uf)) {
-                document.getElementById('reg-pct-sul').textContent = andamento + "%";
-                document.getElementById('reg-bar-sul').style.width = pctNumerico + "%";
-            } else if (['df', 'go', 'mt', 'ms'].includes(uf)) {
-                document.getElementById('reg-pct-co').textContent = andamento + "%";
-                document.getElementById('reg-bar-co').style.width = pctNumerico + "%";
-            } else if (['am', 'pa', 'ac', 'ap', 'ro', 'rr', 'to'].includes(uf)) {
-                document.getElementById('reg-pct-norte').textContent = andamento + "%";
-                document.getElementById('reg-bar-norte').style.width = pctNumerico + "%";
-            } else if (uf === 'br') {
-                ['ne', 'se', 'sul', 'co', 'norte', 'ext'].forEach(r => {
-                    const el = document.getElementById('reg-pct-' + r);
-                    const bar = document.getElementById('reg-bar-' + r);
-                    if (el && el.textContent === "0,00%") el.textContent = andamento + "%";
-                    if (bar && bar.style.width === "0%") bar.style.width = pctNumerico + "%";
-                });
-            }
+        // CICLO DE ATUALIZACAO AUTOMATICA
+        async function executarCicloCompleto() {
+            await carregarProgressoGeralRegioes();
+            await carregarDados();
         }
 
-        carregarDados();
-        setInterval(carregarDados, 30000);
+        executarCicloCompleto();
+        setInterval(executarCicloCompleto, 30000);
     </script>
 </body>
 </html>
