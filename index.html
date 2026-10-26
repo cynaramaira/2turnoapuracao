@@ -512,6 +512,21 @@
         let ufAtiva = "br";
         let regiaoAtiva = "BR";
 
+        // Mapeamento das fotos locais salvas diretamente no repositório
+        const FOTOS_LOCAIS = {
+            "13": "./foto_candidato_13_lula.jpg",
+            "22": "./foto_candidato_22_flavio_bolsonaro.jpg"
+        };
+
+        // Função para obter o caminho correto da foto (local ou contingência)
+        function obterUrlFoto(numero, sqcand) {
+            const numStr = String(numero);
+            if (FOTOS_LOCAIS[numStr]) {
+                return FOTOS_LOCAIS[numStr];
+            }
+            return `${TSE_BASE}/${CICLO}/${PLEITO_2T}/fotos/br/${sqcand}.jpeg`;
+        }
+
         const GRUPOS_REGIAO = {
             'ne': ['pe', 'ba', 'ce', 'ma', 'pb', 'al', 'rn', 'pi', 'se'],
             'se': ['sp', 'rj', 'mg', 'es'],
@@ -770,7 +785,7 @@
                     numero: c.numero,
                     partido: c.partido,
                     eleito: "N",
-                    foto: `${TSE_BASE}/${CICLO}/${PLEITO_2T}/fotos/br/${c.sqcand}.jpeg`,
+                    foto: obterUrlFoto(c.numero, c.sqcand),
                     votosQtd: c.votosQtd,
                     votosPct: pct
                 };
@@ -780,11 +795,41 @@
         }
 
         async function carregarDados() {
-            // Se o usuario selecionou uma soma regional agregada
+            // Se o usuário selecionou uma soma regional agregada
             if (ufAtiva.startsWith('regiao_')) {
                 const chave = ufAtiva.replace('regiao_', '');
                 await carregarConsolidadoRegiao(chave);
                 return;
+            }
+
+            // Para o Brasil consolidado, tenta primeiro o JSON local definitivo salvo no repositório
+            if (ufAtiva === 'br') {
+                try {
+                    const resLocal = await fetch('./apuracao_presidencia_2026_oficial.json');
+                    if (resLocal.ok) {
+                        const dadosLocal = await resLocal.json();
+                        if (dadosLocal.arquivoBrutoTSE) {
+                            processarERenderizar(dadosLocal.arquivoBrutoTSE);
+                            return;
+                        } else if (dadosLocal.finalistas) {
+                            document.getElementById("pct-apurado").textContent = dadosLocal.secoesTotalizadas || "100,00%";
+                            document.getElementById("hora-tse").textContent = dadosLocal.dataFechamento || "Fechado";
+                            const tratados = dadosLocal.finalistas.map(f => ({
+                                nomeUrna: f.nomeUrna,
+                                numero: f.numero,
+                                partido: f.partido,
+                                eleito: f.eleito ? "E" : "N",
+                                foto: obterUrlFoto(f.numero, f.sqcand),
+                                votosQtd: f.votosQtd,
+                                votosPct: f.votosPct
+                            }));
+                            renderizarFinalistas(tratados.slice(0, 2));
+                            return;
+                        }
+                    }
+                } catch (eLocal) {
+                    console.log("Consultando rede remota...");
+                }
             }
 
             const sufixoEleicao = PLEITO_2T.padStart(6, '0');
@@ -843,7 +888,7 @@
                 }
 
                 const sqcand = cand.sqcand || cand.seq || numero;
-                const fotoUrl = `${TSE_BASE}/${CICLO}/${PLEITO_2T}/fotos/br/${sqcand}.jpeg`;
+                const fotoUrl = obterUrlFoto(numero, sqcand);
 
                 candidatosTratados.push({
                     nomeUrna: nomeUrna,
